@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: aks-cluster-setup
+  description: |
+    Generic OpenTofu starting point for bootstrapping an Azure AKS cluster.
+    Fork per customer / environment; the defaults wire up a production-ready
+    cluster with optional ACR pull and DNS workload-identity wiring.
+  annotations:
+    backstage.io/techdocs-ref: dir:./docs
+spec:
+  lifecycle: production
+  owner: denktmit-eg
+  type: infrastructure

@@ -1,0 +1,34 @@
+# Remote state backend (Azure Blob). Rename to `backend.tf` to activate.
+#
+# Default in this module is LOCAL state (./terraform.tfstate, gitignored).
+# Switch to remote state when multiple operators share this module (so the
+# state isn't trapped on a single workstation, and so blob versioning gives
+# you an audit trail):
+#
+#   1. Bootstrap the storage account once (_backstage/docs/01_getting_started.md,
+#      section "Remote state").
+#   2. mv backend.azure.tf.example backend.tf
+#   3. tofu init -migrate-state
+#
+# The values below match the bootstrap commands in 01_getting_started.md.
+terraform {
+  backend "azurerm" {
+    # Resource group that holds the state storage account. Separate from
+    # the cluster RG so destroying the cluster never destroys its state.
+    resource_group_name = "denktmit-rg-acc-tf-state"
+
+    # Storage account name (globally unique across Azure, 3-24 chars,
+    # lowercase + digits only). Bake the cluster's stage into the name to
+    # avoid collisions if another stage ever gets its own state account.
+    storage_account_name = "denktmitacctfstate"
+
+    # Blob container inside the storage account. One container is enough;
+    # use the `key` field below to separate per-cluster state files.
+    container_name = "tfstate"
+
+    # Blob name of THIS module's state file. Add a per-cluster suffix
+    # (e.g. aks-cluster-prod.tfstate) if a second cluster ever lives in
+    # the same storage account.
+    key = "aks-cluster.tfstate"
+  }
+}

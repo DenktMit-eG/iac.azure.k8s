@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars (gitignored) and fill in what applies.
+
+# Both can be omitted if you have already run `az login` and `az account set`.
+# subscription_id = "00000000-0000-0000-0000-000000000000"
+# tenant_id       = "221c1dce-abb1-4ff1-88a6-d5502e2a7f45"
+
+# Defaults give RG=denktmit-rg-acc, cluster=denktmit-aks-acc.
+# prefix = "denktmit"
+# stage  = "acc"
+
+# 1.35 or higher. Bump when 1.35 is retired.
+# kubernetes_version_prefix = "1.35"
+
+# 3 x 8 vCPU / 32 GiB.
+# node_count   = 3
+# node_vm_size = "Standard_D8s_v5"
+
+# Optional: AcrPull on a central ACR.
+# acr_name                = "<your-central-acr-name>"
+# acr_resource_group_name = "<your-acr-resource-group>"
+
+# Optional Kubernetes-side shortcut: Entra group(s) bound to the `cluster-admin`
+# ClusterRole. Leave empty to manage access via Azure RBAC role assignments only
+# (`Azure Kubernetes Service RBAC Cluster Admin` etc., see _backstage/docs/02_connect.md).
+# admin_group_object_ids = ["00000000-0000-0000-0000-000000000000"]
+
+# Optional: Azure DNS zone delegated to us. Triggers ExternalDNS + cert-manager
+# workload-identity wiring (see _backstage/docs/03_dns_handover.md).
+# dns_zone_resource_id = "/subscriptions/.../dnsZones/acc.denktmit.tech"
+
+tags = {
+  Owner   = "DenktMit eG"
+  Project = "Azure AKS Cluster Setup"
+  Source  = "opentofu"
+}

@@ -1,0 +1,32 @@
+# OpenTofu / Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+tfplan
+
+# Variable files (may contain subscription / tenant ids you do not want in git)
+*.tfvars
+*.tfvars.json
+
+# Overrides (local-only experiments)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Locally exported kubeconfigs
+kubeconfig
+kubeconfig.*
+
+# MkDocs build output (created by `mkdocs build` inside _backstage/)
+_backstage/site/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Keep the lockfile and the tfvars template
+!.terraform.lock.hcl
+!terraform.tfvars.example

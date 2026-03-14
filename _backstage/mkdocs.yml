@@ -1,0 +1,36 @@
+site_name: Azure AKS Cluster Setup
+site_description: Generic OpenTofu starting point for bootstrapping an Azure AKS cluster. Fork per customer.
+
+nav:
+  - Home: index.md
+  - Getting started: 01_getting_started.md
+  - Connect: 02_connect.md
+  - DNS handover: 03_dns_handover.md
+  - Cleanup: 04_cleanup.md
+  - Concepts: 05_concepts.md
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+
+plugins:
+  - search
+
+markdown_extensions:
+  - tables
+  - attr_list
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

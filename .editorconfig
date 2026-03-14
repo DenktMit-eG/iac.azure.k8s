@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+max_line_length = 120
+# Trailing whitespace can be a meaningful Markdown line break; leave it alone.
+trim_trailing_whitespace = false
+
+[*.{tf,tfvars,hcl}]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.sh]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[Dockerfile]
+indent_size = 4
