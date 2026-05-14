@@ -6,10 +6,14 @@ The cluster sets `local_account_disabled = true`, so the static cluster-admin
 certificate path is closed. Azure AD is the only way in.
 
 ```bash
-./scripts/tofu.sh az aks get-credentials \
-  --resource-group denktmit-rg-acc --name denktmit-aks-acc --file ~/.kube/config-acc
-export KUBECONFIG=~/.kube/config-acc
+make kubeconfig
+# wrote ~/.kube/config-<cluster_name> on the host. Then:
+export KUBECONFIG="$HOME/.kube/config-<cluster_name>"
 ```
+
+`make kubeconfig` reads `resource_group_name` and `cluster_name` from tofu
+outputs (so the same target works regardless of `prefix`/`stage`) and runs
+`az aks get-credentials --file …` inside the toolbox container.
 
 The kubeconfig contains **no secret**. Instead it has an `exec` snippet telling kubectl: *"before every call, run
 `az` / `kubelogin` to get me a fresh OAuth token"*. Authentication flow on every `kubectl ...` call:
@@ -49,31 +53,44 @@ admin cert with `az aks get-credentials --admin`. This requires:
 After fixing whatever broke, flip the line back to `true` and apply again.
 Every flip is visible in the Azure activity log.
 
-## Granting cluster access (Azure RBAC)
+## Granting and revoking cluster access (Azure RBAC)
 
 The cluster runs with `azure_rbac_enabled = true`, so **authorization inside
 Kubernetes is driven by Azure role assignments on the cluster resource**, not
-by Kubernetes `RoleBinding`s. To let someone in, give them two roles on the
-cluster (or its parent RG):
+by Kubernetes `RoleBinding`s. The roles you'll actually use:
 
-| Role                                          | What it grants                               |
-|-----------------------------------------------|----------------------------------------------|
-| `Azure Kubernetes Service Cluster User Role`  | Lets the user call `az aks get-credentials`. |
-| `Azure Kubernetes Service RBAC Cluster Admin` | Full admin inside Kubernetes. Use sparingly. |
+| Role                                          | What it grants                                                  |
+|-----------------------------------------------|-----------------------------------------------------------------|
+| `Azure Kubernetes Service Cluster User Role`  | Lets the user call `az aks get-credentials` (always required).  |
+| `Azure Kubernetes Service RBAC Cluster Admin` | Full admin inside Kubernetes. Use sparingly.                    |
+| `Azure Kubernetes Service RBAC Reader`        | Read-only across all namespaces when scoped at the cluster.     |
 
-For day-to-day work prefer the narrower roles: `Azure Kubernetes Service RBAC
-Admin` (namespace-scoped), `... RBAC Writer`, `... RBAC Reader`.
+Four helper targets pair the credential-fetch role with the right
+permission role and assign or remove both at once on the cluster's
+resource id:
 
 ```bash
-./scripts/tofu.sh az role assignment create \
-  --assignee <user-or-group-object-id > \
---role "Azure Kubernetes Service Cluster User Role" \
-  --scope $(./scripts/tofu.sh tofu output -raw cluster_id)
+make grant-admin   ID=<user-or-group-object-id>   # Cluster User + RBAC Cluster Admin
+make grant-reader  ID=<user-or-group-object-id>   # Cluster User + RBAC Reader
+make revoke-admin  ID=<user-or-group-object-id>   # remove both roles assigned by grant-admin
+make revoke-reader ID=<user-or-group-object-id>   # remove both roles assigned by grant-reader
+```
 
+**Edge case:** the revoke targets are symmetric with their grant counterparts;
+they both remove `Cluster User Role`. If the same principal has both an
+`admin` and a `reader` grant and you revoke only one, the shared
+`Cluster User Role` goes too and the other grant can no longer fetch a
+kubeconfig. Re-run the remaining grant to restore it, or revoke both.
+
+For namespace-scoped admin/writer/reader, assign by hand against the
+cluster's resource id plus the namespace path:
+
+```bash
+CLUSTER_ID=$(./scripts/tofu.sh tofu output -raw cluster_id)
 ./scripts/tofu.sh az role assignment create \
-  --assignee <user-or-group-object-id > \
---role "Azure Kubernetes Service RBAC Cluster Admin" \
-  --scope $(./scripts/tofu.sh tofu output -raw cluster_id)
+  --assignee <user-or-group-object-id> \
+  --role "Azure Kubernetes Service RBAC Writer" \
+  --scope "$CLUSTER_ID/namespaces/<namespace>"
 ```
 
 If you'd rather pin cluster-admin to a named Entra group, set

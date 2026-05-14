@@ -8,7 +8,7 @@ RUNTIME := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/nul
 
 .DEFAULT_GOAL := help
 
-.PHONY: help image image-rebuild scan login subscription init fmt validate plan apply destroy output shell
+.PHONY: help image image-rebuild scan login subscription init fmt validate plan apply destroy output kubeconfig grant-admin grant-reader revoke-admin revoke-reader shell
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  %-14s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -83,6 +83,53 @@ destroy: ## tofu destroy.
 
 output: ## Print outputs (use ARGS="-raw <name>" for one).
 	$(TOFU) tofu output $(ARGS)
+
+kubeconfig: ## Fetch kubeconfig via Azure AD into ~/.kube/config-<cluster_name>. Cluster name/RG read from tofu outputs (requires `make apply` first).
+	@RG=$$($(TOFU) tofu output -raw resource_group_name 2>/dev/null | tr -d '\r\n'); \
+	NAME=$$($(TOFU) tofu output -raw cluster_name 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$RG" ] || [ -z "$$NAME" ]; then \
+	  echo "tofu outputs not available; run 'make apply' first" >&2; exit 1; \
+	fi; \
+	$(TOFU) bash -c 'az aks get-credentials --resource-group "$$1" --name "$$2" --file "$$HOME/.kube/config-$$2"' _ "$$RG" "$$NAME"; \
+	echo ""; \
+	echo "Wrote ~/.kube/config-$$NAME on the host. Use:"; \
+	echo "  export KUBECONFIG=\"\$$HOME/.kube/config-$$NAME\""
+
+grant-admin: ## Grant ID=<user-or-group-object-id> cluster-admin via Azure RBAC (Cluster User Role + RBAC Cluster Admin); run after `make apply`.
+	@test -n "$(ID)" || (echo "Usage: make grant-admin ID=<user-or-group-object-id>" >&2; exit 1)
+	@CLUSTER_ID=$$($(TOFU) tofu output -raw cluster_id 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$CLUSTER_ID" ]; then \
+	  echo "tofu outputs not available; run 'make apply' first" >&2; exit 1; \
+	fi; \
+	$(TOFU) az role assignment create --assignee "$(ID)" --role "Azure Kubernetes Service Cluster User Role" --scope "$$CLUSTER_ID"; \
+	$(TOFU) az role assignment create --assignee "$(ID)" --role "Azure Kubernetes Service RBAC Cluster Admin" --scope "$$CLUSTER_ID"
+
+grant-reader: ## Grant ID=<user-or-group-object-id> cluster-wide read-only access via Azure RBAC (Cluster User Role + RBAC Reader); run after `make apply`.
+	@test -n "$(ID)" || (echo "Usage: make grant-reader ID=<user-or-group-object-id>" >&2; exit 1)
+	@CLUSTER_ID=$$($(TOFU) tofu output -raw cluster_id 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$CLUSTER_ID" ]; then \
+	  echo "tofu outputs not available; run 'make apply' first" >&2; exit 1; \
+	fi; \
+	$(TOFU) az role assignment create --assignee "$(ID)" --role "Azure Kubernetes Service Cluster User Role" --scope "$$CLUSTER_ID"; \
+	$(TOFU) az role assignment create --assignee "$(ID)" --role "Azure Kubernetes Service RBAC Reader" --scope "$$CLUSTER_ID"
+
+revoke-admin: ## Revoke ID=<user-or-group-object-id>'s cluster-admin Azure RBAC pair (RBAC Cluster Admin + Cluster User Role); run after `make apply`.
+	@test -n "$(ID)" || (echo "Usage: make revoke-admin ID=<user-or-group-object-id>" >&2; exit 1)
+	@CLUSTER_ID=$$($(TOFU) tofu output -raw cluster_id 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$CLUSTER_ID" ]; then \
+	  echo "tofu outputs not available; run 'make apply' first" >&2; exit 1; \
+	fi; \
+	$(TOFU) az role assignment delete --assignee "$(ID)" --role "Azure Kubernetes Service RBAC Cluster Admin" --scope "$$CLUSTER_ID"; \
+	$(TOFU) az role assignment delete --assignee "$(ID)" --role "Azure Kubernetes Service Cluster User Role" --scope "$$CLUSTER_ID"
+
+revoke-reader: ## Revoke ID=<user-or-group-object-id>'s cluster-wide read-only Azure RBAC pair (RBAC Reader + Cluster User Role); run after `make apply`.
+	@test -n "$(ID)" || (echo "Usage: make revoke-reader ID=<user-or-group-object-id>" >&2; exit 1)
+	@CLUSTER_ID=$$($(TOFU) tofu output -raw cluster_id 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$CLUSTER_ID" ]; then \
+	  echo "tofu outputs not available; run 'make apply' first" >&2; exit 1; \
+	fi; \
+	$(TOFU) az role assignment delete --assignee "$(ID)" --role "Azure Kubernetes Service RBAC Reader" --scope "$$CLUSTER_ID"; \
+	$(TOFU) az role assignment delete --assignee "$(ID)" --role "Azure Kubernetes Service Cluster User Role" --scope "$$CLUSTER_ID"
 
 shell: ## Drop into a shell inside the aks-iac-toolbox image (for debugging).
 	$(TOFU) bash

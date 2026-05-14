@@ -9,22 +9,29 @@ is delegated to GitOps, not this module.
 make image                                # build the hardened aks-iac-toolbox image
 make login                                # az login --use-device-code
 make subscription SUB=<target-sub-id>     # az default + writes subscription_id/tenant_id to terraform.tfvars
+make init                                 # tofu init (downloads providers, writes lockfile)
 make plan
 make apply                                # ~10-15 min
-./scripts/tofu.sh az aks get-credentials --resource-group denktmit-rg-acc --name denktmit-aks-acc \
-  --file ~/.kube/config-acc               # fetch kubeconfig via Azure AD (static admin cert is disabled)
+make kubeconfig                           # fetch kubeconfig via Azure AD into ~/.kube/config-<cluster_name>
 ```
 
 The cluster runs with `local_account_disabled = true` and `azure_rbac_enabled = true`: there is no static
 cluster-admin cert, and Kubernetes-level authorization is driven by Azure RBAC role assignments on the cluster.
-After `make apply`, grant yourself (and anyone else who needs access) two roles on the cluster resource:
+After `make apply`, grant yourself (and anyone else who needs in) the right role pair on the cluster resource;
+the matching revoke targets undo a grant later:
 
 ```bash
-CLUSTER_ID=$(./scripts/tofu.sh tofu output -raw cluster_id)
-./scripts/tofu.sh az role assignment create --assignee <user-or-group-id> \
-  --role "Azure Kubernetes Service Cluster User Role" --scope "$CLUSTER_ID"
-./scripts/tofu.sh az role assignment create --assignee <user-or-group-id> \
-  --role "Azure Kubernetes Service RBAC Cluster Admin" --scope "$CLUSTER_ID"
+make grant-admin   ID=<user-or-group-object-id>   # Cluster User + RBAC Cluster Admin
+make grant-reader  ID=<user-or-group-object-id>   # Cluster User + RBAC Reader (read-only)
+make revoke-admin  ID=<user-or-group-object-id>   # remove what grant-admin assigned
+make revoke-reader ID=<user-or-group-object-id>   # remove what grant-reader assigned
+```
+
+Your own object id is `./scripts/tofu.sh az ad signed-in-user show --query id -o tsv`. After the grant lands
+(Azure RBAC propagation takes ~1-5 minutes), verify with:
+
+```bash
+kubectl --kubeconfig ~/.kube/config-<cluster_name> get nodes   # expect 3 Ready
 ```
 
 For details (narrower per-namespace roles, the Entra-group shortcut via `admin_group_object_ids`, recovery if
@@ -62,7 +69,7 @@ application workloads.
 ├── docker/Dockerfile             # hardened aks-iac-toolbox image (Ubuntu 24.04, tofu + az + kubectl)
 ├── scripts/tofu.sh               # runs the aks-iac-toolbox image with this module bind-mounted
 ├── scripts/update-tfvars.sh      # sets subscription_id / tenant_id in tfvars (used by `make subscription`)
-├── Makefile                      # make image / plan / apply / destroy / ...
+├── Makefile                      # make image / plan / apply / kubeconfig / {grant,revoke}-{admin,reader} / ...
 │
 └── _backstage/                   # documentation (Backstage TechDocs / MkDocs)
     ├── backstage.yaml            # Backstage Component descriptor

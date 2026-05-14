@@ -131,20 +131,21 @@ make apply
 ## 7. Fetch credentials and verify
 
 The cluster runs with `local_account_disabled = true`, so the only login path
-is Azure AD. `az aks get-credentials` writes a kubeconfig whose auth section is
-an `exec` snippet: kubectl asks `az` / `kubelogin` for a fresh OAuth token on
-every call. No long-lived secret on disk.
+is Azure AD. `make kubeconfig` reads `resource_group_name` and `cluster_name`
+from tofu outputs and runs `az aks get-credentials` inside the toolbox; the
+file lands at `~/.kube/config-<cluster_name>` on the host (via the bind-mounted
+`~/.kube`). The kubeconfig itself has no embedded secret: it carries an `exec`
+snippet that asks `az` / `kubelogin` for a fresh OAuth token on every call.
 
 ```bash
-./scripts/tofu.sh az aks get-credentials \
-  --resource-group denktmit-rg-acc --name denktmit-aks-acc --file ~/.kube/config-acc
-KUBECONFIG=~/.kube/config-acc kubectl get nodes          # expect 3 Ready
-KUBECONFIG=~/.kube/config-acc kubectl get storageclass   # expect managed-csi (default)
+make kubeconfig
+export KUBECONFIG="$HOME/.kube/config-denktmit-aks-acc"   # path printed by make kubeconfig
+kubectl get nodes                                          # expect 3 Ready
+kubectl get storageclass                                   # expect managed-csi (default)
 ```
 
-The kubeconfig lands at `~/.kube/config-acc` on the host (via the bind-mounted
-`~/.kube`). See [Connect](02_connect.md) for the auth flow in detail and how
-to recover if AAD breaks.
+See [Connect](02_connect.md) for the auth flow in detail and how to recover
+if AAD breaks.
 
 ## 8. Ask the customer for DNS handover details
 
